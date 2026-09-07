@@ -209,45 +209,22 @@ export default function MenuPage() {
     );
   }, [mealItems, search]);
 
-  const paginatedCoffeeItems = useMemo(() => {
-    const totalPageCount = Math.max(
-      1,
-      Math.ceil(filteredCoffeeItems.length / itemsPerPage),
-    );
-    if (currentPage > totalPageCount) {
-      setCurrentPage(totalPageCount);
-    }
-
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredCoffeeItems.slice(start, start + itemsPerPage);
-  }, [currentPage, filteredCoffeeItems, itemsPerPage]);
-
-  const paginatedMealItems = useMemo(() => {
-    const totalPageCount = Math.max(
-      1,
-      Math.ceil(filteredMealItems.length / itemsPerPage),
-    );
-    if (currentPage > totalPageCount) {
-      setCurrentPage(totalPageCount);
-    }
-
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredMealItems.slice(start, start + itemsPerPage);
-  }, [currentPage, filteredMealItems, itemsPerPage]);
-
-  const totalPages =
-    (activeTab === "coffee"
-      ? filteredCoffeeItems.length
-      : filteredMealItems.length) === 0
-      ? 1
-      : Math.ceil(
-          (activeTab === "coffee"
-            ? filteredCoffeeItems.length
-            : filteredMealItems.length) / itemsPerPage,
-        );
-
   const activeItems =
     activeTab === "coffee" ? filteredCoffeeItems : filteredMealItems;
+  const totalPages = Math.max(1, Math.ceil(activeItems.length / itemsPerPage));
+  const pageStart = (currentPage - 1) * itemsPerPage;
+  const paginatedCoffeeItems = useMemo(() => {
+    if (activeTab !== "coffee") return [];
+
+    return filteredCoffeeItems.slice(pageStart, pageStart + itemsPerPage);
+  }, [activeTab, filteredCoffeeItems, itemsPerPage, pageStart]);
+
+  const paginatedMealItems = useMemo(() => {
+    if (activeTab !== "meals") return [];
+
+    return filteredMealItems.slice(pageStart, pageStart + itemsPerPage);
+  }, [activeTab, filteredMealItems, itemsPerPage, pageStart]);
+
   const showingFrom =
     activeItems.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const showingTo = Math.min(currentPage * itemsPerPage, activeItems.length);
@@ -697,12 +674,31 @@ export default function MenuPage() {
       return;
     }
 
-    if (activeTab === "meals" && !formData.portionSize.trim()) {
+    if (!formData.image && !formData.imagePreview) {
+      setPageAlert({
+        visible: true,
+        variant: "warning",
+        title: "Image Required",
+        description: "Please upload an image for the menu item.",
+      });
+
+      return;
+    }
+
+    const portionSize = Number(formData.portionSize);
+
+    if (
+      activeTab === "meals" &&
+      (!formData.portionSize.trim() ||
+        !Number.isInteger(portionSize) ||
+        portionSize < 1 ||
+        portionSize > 4)
+    ) {
       setPageAlert({
         visible: true,
         variant: "warning",
         title: "Portion Required",
-        description: "Please enter the meal portion.",
+        description: "Please enter a whole number from 1 to 4.",
       });
 
       return;
@@ -1293,23 +1289,36 @@ export default function MenuPage() {
                       {activeTab === "meals" && (
                         <FormField label="Portion" required>
                           <input
-                            type="text"
+                            type="number"
+                            min={1}
+                            max={4}
+                            step={1}
                             value={formData.portionSize}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
+                            onChange={(e) => {
+                              const value = e.target.value;
 
-                                /*
-                                 * FIX:
-                                 * was "portion"
-                                 *
-                                 * must be:
-                                 * "portionSize"
-                                 */
-                                portionSize: e.target.value,
-                              }))
-                            }
-                            placeholder="e.g. 1 person"
+                              if (value === "") {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  portionSize: "",
+                                }));
+                                return;
+                              }
+
+                              const number = Number(value);
+
+                              if (
+                                Number.isInteger(number) &&
+                                number >= 1 &&
+                                number <= 4
+                              ) {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  portionSize: value,
+                                }));
+                              }
+                            }}
+                            placeholder="e.g. 1 ( Max 4 )"
                             className={inputClass}
                           />
                         </FormField>
@@ -1511,7 +1520,10 @@ export default function MenuPage() {
                   ================================================= */}
 
                   <div>
-                    <FormField label="Image">
+                    <FormField
+                      label="Image"
+                      required={editingId === null || !formData.imagePreview}
+                    >
                       <label className="group flex min-h-[280px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 transition hover:border-amber-400 hover:bg-amber-50">
                         {formData.imagePreview ? (
                           <div className="relative h-full min-h-[280px] w-full">
@@ -1874,9 +1886,9 @@ function MealTable({
 
           <th className={thClass}>Portion</th>
 
-          <th className={thClass}>Includes</th>
+          {/* <th className={thClass}>Includes</th> */}
 
-          <th className={thClass}>Description</th>
+          {/* <th className={thClass}>Description</th> */}
 
           <th className={`${thClass} text-right`}>Actions</th>
         </tr>
@@ -1931,7 +1943,7 @@ function MealTable({
               </span>
             </td>
 
-            <td className="max-w-xs px-5 py-4">
+            {/* <td className="max-w-xs px-5 py-4">
               <div className="flex flex-wrap gap-1.5">
                 {item.includes.slice(0, 3).map((include, index) => (
                   <span
@@ -1948,13 +1960,13 @@ function MealTable({
                   </span>
                 )}
               </div>
-            </td>
+            </td> */}
 
-            <td className="max-w-sm px-5 py-4">
+            {/* <td className="max-w-sm px-5 py-4">
               <p className="truncate text-sm text-[#79543C]">
                 {item.description || "—"}
               </p>
-            </td>
+            </td> */}
 
             <td className="relative px-5 py-4">
               <div
@@ -2320,8 +2332,12 @@ function ViewMenuItemModal({
   item: CoffeeItem | MealItem;
   onClose: () => void;
 }) {
-  const isMeal = "includes" in item;
-  const itemTags = isMeal ? item.includes : item.ingredients;
+  const isMeal = item.category === 1;
+  const mealItem = item as MealItem;
+  const coffeeItem = item as CoffeeItem;
+  const itemTags: string[] = isMeal
+    ? mealItem.includes
+    : coffeeItem.ingredients;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#2D160A]/60 p-4 backdrop-blur-sm">
@@ -2370,13 +2386,13 @@ function ViewMenuItemModal({
                 <div className="rounded-xl bg-amber-50 p-3">
                   <p className="text-xs text-[#8A5A3C]">Preparation</p>
                   <p className="mt-1 font-semibold text-[#4A2410]">
-                    {item.preparationTimeInMinutes} min
+                    {mealItem.preparationTimeInMinutes} min
                   </p>
                 </div>
                 <div className="rounded-xl bg-amber-50 p-3">
                   <p className="text-xs text-[#8A5A3C]">Portion</p>
                   <p className="mt-1 font-semibold text-[#4A2410]">
-                    {item.portionSize || "-"}
+                    {mealItem.portionSize || "-"}
                   </p>
                 </div>
               </>
@@ -2503,7 +2519,7 @@ function PaginationButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="h-9 rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-[#6B422B] transition hover:border-amber-400 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-9 cursor-pointer rounded-lg border border-amber-200 bg-white px-3 text-sm font-semibold text-[#6B422B] transition hover:border-amber-400 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {label}
     </button>
